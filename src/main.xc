@@ -1115,7 +1115,7 @@ void update_torque(int switch_value, client interface TorqueControlInterface i_t
 
 // This function handles everything.
 // TODO : Finish this (Button , emergency stop, implement pwm alerts if they exist)
-void behavior(client interface rs485_interface h, server interface switch_feedback i_switch_feedback, server interface button_interface j, server interface LED_feedback k, client interface TorqueControlInterface i_torque_control, client interface UpdateBrake i_update_brake)
+void behavior(client interface rs485_interface h, server interface switch_feedback i_switch_feedback, server interface button_interface i_button_interface, server interface LED_feedback k, client interface TorqueControlInterface i_torque_control, client interface UpdateBrake i_update_brake)
 {
     MotorcontrolConfig  motorcontrol_config;
 
@@ -1192,9 +1192,11 @@ void behavior(client interface rs485_interface h, server interface switch_feedba
         switch(state)
         {
         case 0:
+            //printf("state is now 0\n");
             select
             {
-                case j.button_input(int integer):
+                case i_button_interface.button_input(int integer):
+                    printf("button pressed \n");
                     if(integer==1)
                     {
                         state = 1;
@@ -1238,11 +1240,12 @@ void behavior(client interface rs485_interface h, server interface switch_feedba
             }
             break;
         case 1 :
+            //printf("state is now 1\n");
             int unfold_request = 0;
             int update_battery_request = 0;
             select
             {
-                case j.button_input(int integer):
+                case i_button_interface.button_input(int integer):
                     if(integer==0)
                     {
                         unfold_request = 1;
@@ -1320,26 +1323,31 @@ void behavior(client interface rs485_interface h, server interface switch_feedba
                 set_led_register(h,1,led_register_2,k);
                 set_led_register(h,2,led_register_3,k);
                 state = 2;
-                printf("state is now : %d \n", state);
             }
             break;
+
+        // wheel has been unfolded and is now being driven
         case 2 :
+            //printf("state is now 2\n");
             int button_long = 0;
             int button_short = 0;
             int switch_value_updated = 0;
             i_torque_control.set_torque_control_enabled();
+            int button_value = 0;
             select
             {
-            case j.button_input(int integer):
-                 if(integer==1)
-                 {
-                     button_long = 1;
-                 }
-                 else
-                 {
-                     button_short = 1;
-                 }
-                 break;
+            // button is the data being sent over the i_button_interface (0 for pressed, 1 for not pressed)
+            case i_button_interface.button_input(int integer):
+                timer timer_3;
+                unsigned time_3;
+                timer_3 :> time_3;
+                // if button signal is detected
+                if(integer==0)
+                {
+                    button_short = 1;
+
+                }
+                break;
             case timer_1  when  timerafter(time_1) :> int  now:
                 int switch_pos = get_switch_position(h,i_switch_feedback);
                 timer_1 :> time_1;
@@ -1400,12 +1408,13 @@ void behavior(client interface rs485_interface h, server interface switch_feedba
             {
                 switch_value = 0;
                 i_torque_control.set_torque(switch_value * 15);
-                fold_wheel(app_tile_usec,
+                printf("button short - folding wheel \n");
+                /*fold_wheel(app_tile_usec,
                         dc_bus_voltage,
                         pull_brake_voltage,
                         hold_brake_voltage,
                         pull_brake_time,
-                        i_torque_control, i_update_brake);
+                        i_torque_control, i_update_brake);*/
                 state = 1;
                 timer_1 :> time_1;
                 timer_2 :> time_2;
@@ -1414,17 +1423,19 @@ void behavior(client interface rs485_interface h, server interface switch_feedba
             {
                 switch_value = 0;
                 i_torque_control.set_torque(switch_value * 15);
+                printf("button long - folding wheel and turning off \n");
                 //motorcontrol_config = i_torque_control.get_config();
-                fold_wheel(app_tile_usec,
+                /*fold_wheel(app_tile_usec,
                         dc_bus_voltage,
                         pull_brake_voltage,
                         hold_brake_voltage,
                         pull_brake_time,
-                        i_torque_control, i_update_brake);
+                        i_torque_control, i_update_brake);*/
                 state = 0;
             }
             break;
         case 3:
+            //printf("state is now 3\n");
             if(error_type == 1)
             {
                 battery_level = get_battery_level();
